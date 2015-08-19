@@ -20,6 +20,28 @@
 #import "EMSearchDisplayController.h"
 #import "ConvertToCommonEmoticonsHelper.h"
 #import "RobotManager.h"
+#import "UserProfileManager.h"
+#import "RobotChatViewController.h"
+
+@implementation EMConversation (search)
+
+//根据用户昵称,环信机器人名称,群名称进行搜索
+- (NSString*)showName
+{
+    if (self.conversationType == eConversationTypeChat) {
+        if ([[RobotManager sharedInstance] isRobotWithUsername:self.chatter]) {
+            return [[RobotManager sharedInstance] getRobotNickWithUsername:self.chatter];
+        }
+        return [[UserProfileManager sharedInstance] getNickNameWithUsername:self.chatter];
+    } else if (self.conversationType == eConversationTypeGroupChat) {
+        if ([self.ext objectForKey:@"groupSubject"] || [self.ext objectForKey:@"isPublic"]) {
+           return [self.ext objectForKey:@"groupSubject"];
+        }
+    }
+    return self.chatter;
+}
+
+@end
 
 @interface ChatListViewController ()<UITableViewDelegate,UITableViewDataSource, UISearchDisplayDelegate,SRRefreshDelegate, UISearchBarDelegate, IChatManagerDelegate,ChatViewControllerDelegate>
 
@@ -188,9 +210,7 @@
             EMConversation *conversation = [weakSelf.searchController.resultsSource objectAtIndex:indexPath.row];
             cell.name = conversation.chatter;
             if (conversation.conversationType == eConversationTypeChat) {
-                if ([[RobotManager sharedInstance] isRobotWithUsername:conversation.chatter]) {
-                    cell.name = [[RobotManager sharedInstance] getRobotNickWithUsername:conversation.chatter];
-                }
+                cell.name = [[RobotManager sharedInstance] getRobotNickWithUsername:conversation.chatter];
                 cell.placeholderImage = [UIImage imageNamed:@"chatListCellHead.png"];
             }
             else{
@@ -225,9 +245,17 @@
             [weakSelf.searchController.searchBar endEditing:YES];
             
             EMConversation *conversation = [weakSelf.searchController.resultsSource objectAtIndex:indexPath.row];
-            ChatViewController *chatVC = [[ChatViewController alloc] initWithChatter:conversation.chatter conversationType:conversation.conversationType];
-            chatVC.title = conversation.chatter;
-            [weakSelf.navigationController pushViewController:chatVC animated:YES];
+            ChatViewController *chatController;
+            if ([[RobotManager sharedInstance] isRobotWithUsername:conversation.chatter]) {
+                chatController = [[RobotChatViewController alloc] initWithChatter:conversation.chatter
+                                                                 conversationType:conversation.conversationType];
+                chatController.title = [[RobotManager sharedInstance] getRobotNickWithUsername:conversation.chatter];
+            }else {
+                chatController = [[ChatViewController alloc] initWithChatter:conversation.chatter
+                                                            conversationType:conversation.conversationType];
+                chatController.title = [conversation showName];
+            }
+            [weakSelf.navigationController pushViewController:chatController animated:YES];
         }];
     }
     
@@ -350,9 +378,7 @@
     EMConversation *conversation = [self.dataSource objectAtIndex:indexPath.row];
     cell.name = conversation.chatter;
     if (conversation.conversationType == eConversationTypeChat) {
-        if ([[RobotManager sharedInstance] isRobotWithUsername:conversation.chatter]) {
-            cell.name = [[RobotManager sharedInstance] getRobotNickWithUsername:conversation.chatter];
-        }
+        cell.name = [[RobotManager sharedInstance] getRobotNickWithUsername:conversation.chatter];
         cell.placeholderImage = [UIImage imageNamed:@"chatListCellHead.png"];
     }
     else{
@@ -421,15 +447,22 @@
                 }
             }
         }
+    } else if (conversation.conversationType == eConversationTypeChat) {
+        title = [[UserProfileManager sharedInstance] getNickNameWithUsername:conversation.chatter];
     }
     
     NSString *chatter = conversation.chatter;
-    chatController = [[ChatViewController alloc] initWithChatter:chatter conversationType:conversation.conversationType];
-    chatController.delelgate = self;
-    chatController.title = title;
-    if ([[RobotManager sharedInstance] getRobotNickWithUsername:chatter]) {
+    if ([[RobotManager sharedInstance] isRobotWithUsername:chatter]) {
+        chatController = [[RobotChatViewController alloc] initWithChatter:chatter
+                                                    conversationType:conversation.conversationType];
         chatController.title = [[RobotManager sharedInstance] getRobotNickWithUsername:chatter];
+    }else {
+        chatController = [[ChatViewController alloc] initWithChatter:chatter
+                                                    conversationType:conversation.conversationType];
+        chatController.title = title;
     }
+    
+    chatController.delelgate = self;
     [self.navigationController pushViewController:chatController animated:YES];
 }
 
@@ -460,7 +493,7 @@
 - (void)searchBar:(UISearchBar *)searchBar textDidChange:(NSString *)searchText
 {
     __weak typeof(self) weakSelf = self;
-    [[RealtimeSearchUtil currentUtil] realtimeSearchWithSource:self.dataSource searchText:(NSString *)searchText collationStringSelector:@selector(chatter) resultBlock:^(NSArray *results) {
+    [[RealtimeSearchUtil currentUtil] realtimeSearchWithSource:self.dataSource searchText:(NSString *)searchText collationStringSelector:@selector(showName) resultBlock:^(NSArray *results) {
         if (results) {
             dispatch_async(dispatch_get_main_queue(), ^{
                 [weakSelf.searchController.resultsSource removeAllObjects];

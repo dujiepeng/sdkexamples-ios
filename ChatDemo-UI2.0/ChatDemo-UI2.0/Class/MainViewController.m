@@ -21,6 +21,7 @@
 #import "ChatViewController.h"
 #import "EMCDDeviceManager.h"
 #import "RobotManager.h"
+#import "UserProfileManager.h"
 //两次提示的默认间隔
 static const CGFloat kDefaultPlaySoundInterval = 3.0;
 static NSString *kMessageType = @"MessageType";
@@ -348,11 +349,25 @@ static NSString *kGroupName = @"GroupName";
     if (needShowNotification) {
 #if !TARGET_IPHONE_SIMULATOR
         
-        BOOL isAppActivity = [[UIApplication sharedApplication] applicationState] == UIApplicationStateActive;
-        if (!isAppActivity) {
-            [self showNotificationWithMessage:message];
-        }else {
-            [self playSoundAndVibration];
+        //        BOOL isAppActivity = [[UIApplication sharedApplication] applicationState] == UIApplicationStateActive;
+        //        if (!isAppActivity) {
+        //            [self showNotificationWithMessage:message];
+        //        }else {
+        //            [self playSoundAndVibration];
+        //        }
+        UIApplicationState state = [[UIApplication sharedApplication] applicationState];
+        switch (state) {
+            case UIApplicationStateActive:
+                [self playSoundAndVibration];
+                break;
+            case UIApplicationStateInactive:
+                [self playSoundAndVibration];
+                break;
+            case UIApplicationStateBackground:
+                [self showNotificationWithMessage:message];
+                break;
+            default:
+                break;
         }
 #endif
     }
@@ -420,7 +435,7 @@ static NSString *kGroupName = @"GroupName";
                 break;
         }
         
-        NSString *title = message.from;
+        NSString *title = [[UserProfileManager sharedInstance] getNickNameWithUsername:message.from];
         if (message.messageType == eMessageTypeGroupChat) {
             NSArray *groupArray = [[EaseMob sharedInstance].chatManager groupList];
             for (EMGroup *group in groupArray) {
@@ -700,16 +715,24 @@ static NSString *kGroupName = @"GroupName";
 #pragma mark - 自动登录回调
 
 - (void)willAutoReconnect{
-    [self hideHud];
-    [self showHint:NSLocalizedString(@"reconnection.ongoing", @"reconnecting...")];
+    NSUserDefaults *ud = [NSUserDefaults standardUserDefaults];
+    NSNumber *showreconnect = [ud objectForKey:@"identifier_showreconnect_enable"];
+    if (showreconnect && [showreconnect boolValue]) {
+        [self hideHud];
+        [self showHint:NSLocalizedString(@"reconnection.ongoing", @"reconnecting...")];
+    }
 }
 
 - (void)didAutoReconnectFinishedWithError:(NSError *)error{
-    [self hideHud];
-    if (error) {
-        [self showHint:NSLocalizedString(@"reconnection.fail", @"reconnection failure, later will continue to reconnection")];
-    }else{
-        [self showHint:NSLocalizedString(@"reconnection.success", @"reconnection successful！")];
+    NSUserDefaults *ud = [NSUserDefaults standardUserDefaults];
+    NSNumber *showreconnect = [ud objectForKey:@"identifier_showreconnect_enable"];
+    if (showreconnect && [showreconnect boolValue]) {
+        [self hideHud];
+        if (error) {
+            [self showHint:NSLocalizedString(@"reconnection.fail", @"reconnection failure, later will continue to reconnection")];
+        }else{
+            [self showHint:NSLocalizedString(@"reconnection.success", @"reconnection successful！")];
+        }
     }
 }
 

@@ -8,8 +8,6 @@
 
 #import "ContactListViewController.h"
 
-#import "EaseMob.h"
-#import "UserModel.h"
 #import "ChineseToPinyin.h"
 #import "ChatViewController.h"
 #import "UIViewController+HUD.h"
@@ -97,7 +95,7 @@
     }
     else{
         NSArray *userSection = [self.dataArray objectAtIndex:(indexPath.section - 1)];
-        UserModel *model = [userSection objectAtIndex:indexPath.row];
+        EMUserModel *model = [userSection objectAtIndex:indexPath.row];
         cell.model = model;
     }
     
@@ -149,7 +147,7 @@
     
     NSInteger section = indexPath.section;
     NSInteger row = indexPath.row;
-    if (section) {
+    if (section == 0) {
         if (row == 0) {
 //            [self.navigationController pushViewController:[ApplyViewController shareController] animated:YES];
         }
@@ -170,9 +168,8 @@
         }
     }
     else{
-        UserModel *model = [[self.dataArray objectAtIndex:(section - 1)] objectAtIndex:row];
-        EMConversation *conversation = [[EaseMob sharedInstance].chatManager conversationForChatter:model.buddy.username conversationType:eConversationTypeChat];
-        ChatViewController *chatController = [[ChatViewController alloc] initWithConversation:conversation];
+        EMUserModel *model = [[self.dataArray objectAtIndex:(section - 1)] objectAtIndex:row];
+        ChatViewController *chatController = [[ChatViewController alloc] initWithConversationChatter:model.buddy.username conversationType:eConversationTypeChat];
         chatController.title = model.buddy.username;
         [self.navigationController pushViewController:chatController animated:YES];
     }
@@ -215,7 +212,7 @@
     
     //按首字母分组
     for (EMBuddy *buddy in contactsSource) {
-        UserModel *model = [[UserModel alloc] initWithBuddy:buddy];
+        EMUserModel *model = [[EMUserModel alloc] initWithBuddy:buddy];
         if (model) {
             model.avatarImage = [UIImage imageNamed:@"user"];
             model.nickname = buddy.username;
@@ -230,7 +227,7 @@
     
     //每个section内的数组排序
     for (int i = 0; i < [sortedArray count]; i++) {
-        NSArray *array = [[sortedArray objectAtIndex:i] sortedArrayUsingComparator:^NSComparisonResult(UserModel *obj1, UserModel *obj2) {
+        NSArray *array = [[sortedArray objectAtIndex:i] sortedArrayUsingComparator:^NSComparisonResult(EMUserModel *obj1, EMUserModel *obj2) {
             NSString *firstLetter1 = [ChineseToPinyin pinyinFromChineseString:obj1.buddy.username];
             firstLetter1 = [[firstLetter1 substringToIndex:1] uppercaseString];
             
@@ -264,15 +261,17 @@
     [self showHudInView:self.view hint:NSLocalizedString(@"loadData", @"Load data...")];
     __weak ContactListViewController *weakSelf = self;
     [[[EaseMob sharedInstance] chatManager] asyncFetchBuddyListWithCompletion:^(NSArray *buddyList, EMError *error) {
-        [weakSelf tableViewDidFinishTriggerHeader:YES reload:NO];
-        [weakSelf hideHud];
-        
-        if (error == nil) {
-            [weakSelf _reloadWithData:buddyList];
-        }
-        else{
-            [weakSelf showHint:NSLocalizedString(@"loadDataFailed", @"Load data failed.")];
-        }
+        dispatch_async(dispatch_get_main_queue(), ^{
+            [weakSelf hideHud];
+            if (error == nil) {
+                [weakSelf _reloadWithData:buddyList];
+            }
+            else{
+                [weakSelf showHint:NSLocalizedString(@"loadDataFailed", @"Load data failed.")];
+            }
+            
+            [weakSelf tableViewDidFinishTriggerHeader:YES reload:YES];
+        });
     } onQueue:nil];
 }
 
